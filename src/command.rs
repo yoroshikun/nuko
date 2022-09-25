@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) trait Command {
     async fn respond(
         &self,
+        _member: &Option<Member>,
         _options: &Option<Vec<ApplicationCommandInteractionDataOption>>,
         _ctx: &mut worker::RouteContext<()>,
     ) -> Result<InteractionApplicationCommandCallbackData, InteractionError> {
@@ -50,5 +51,6 @@ pub(crate) fn init_commands() -> Vec<Box<dyn Command + Sync>> {
     let mut v: Vec<Box<dyn Command + Sync>> = Vec::new();
     v.push(Box::new(commands::hey::Hey {}));
     v.push(Box::new(commands::jisho::Jisho {}));
+    v.push(Box::new(commands::xe::XE {}));
     v
 }

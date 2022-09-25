@@ -3,7 +3,7 @@ use crate::error::InteractionError;
 use crate::interaction::{
     ApplicationCommandInteractionDataOption, ApplicationCommandOption,
     ApplicationCommandOptionChoice, ApplicationCommandOptionType,
-    InteractionApplicationCommandCallbackData,
+    InteractionApplicationCommandCallbackData, Member,
 };
 
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ pub(crate) struct Hey {}
 impl Command for Hey {
     async fn respond(
         &self,
+        _member: &Option<Member>,
         options: &Option<Vec<ApplicationCommandInteractionDataOption>>,
         _ctx: &mut worker::RouteContext<()>,
     ) -> Result<InteractionApplicationCommandCallbackData, InteractionError> {

@@ -3,6 +3,11 @@ type = "javascript"
 workers_dev = true
 compatibility_date = "2022-08-19"
 
+kv_namespaces = [
+{ binding = "exchange_defaults", id = "0f07afb6463a453b8bc37b497d7dc99e" }
+]
+
+
 [vars]
 WORKERS_RS_VERSION = "0.0.9"
 

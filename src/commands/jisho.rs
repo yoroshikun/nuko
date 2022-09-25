@@ -4,7 +4,7 @@ use crate::helpers::jisho_client::JishoClient;
 use crate::interaction::{
     ApplicationCommandInteractionDataOption, ApplicationCommandOption,
     ApplicationCommandOptionChoice, ApplicationCommandOptionType,
-    InteractionApplicationCommandCallbackData,
+    InteractionApplicationCommandCallbackData, Member,
 };
 
 use async_trait::async_trait;
@@ -15,6 +15,7 @@ pub(crate) struct Jisho {}
 impl Command for Jisho {
     async fn respond(
         &self,
+        _member: &Option<Member>,
         options: &Option<Vec<ApplicationCommandInteractionDataOption>>,
         _ctx: &mut worker::RouteContext<()>,
     ) -> Result<InteractionApplicationCommandCallbackData, InteractionError> {

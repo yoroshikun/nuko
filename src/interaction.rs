@@ -60,18 +60,33 @@ pub(crate) struct Interaction {
     guild_id: Option<String>,
     channel_id: Option<String>,
     application_id: Option<String>,
+    member: Option<Member>,
     user: Option<User>,
     version: Option<u8>,
 }
 
 #[derive(Deserialize, Serialize)]
+pub(crate) struct Member {
+    pub user: User,
+    pub roles: Vec<String>,
+    pub premium_since: Option<String>,
+    pub permissions: String,
+    pub pending: bool,
+    pub nick: Option<String>,
+    pub mute: bool,
+    pub joined_at: String,
+    pub is_pending: bool,
+    pub deaf: bool,
+}
+
+#[derive(Deserialize, Serialize)]
 pub(crate) struct User {
-    avatar: String,
-    avatar_decoration: Option<String>,
-    discriminator: String,
-    id: String,
-    public_flags: u32,
-    username: String,
+    pub avatar: String,
+    pub avatar_decoration: Option<String>,
+    pub discriminator: String,
+    pub id: String,
+    pub public_flags: u32,
+    pub username: String,
 }
 
 #[derive(Serialize_repr, Deserialize_repr, Clone)]
@@ -81,6 +96,7 @@ pub(crate) enum ApplicationCommandOptionType {
     SubCommand = 1,
     SubCommandGroup = 2,
     String = 3,
+    Boolean = 5,
 }
 #[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct ApplicationCommandOption {
@@ -135,7 +151,7 @@ impl Interaction {
         for boxed in commands.iter() {
             let com = &*boxed;
             if com.name() == data.name {
-                let response = com.respond(&data.options, ctx).await?;
+                let response = com.respond(&self.member, &data.options, ctx).await?;
 
                 return Ok(InteractionResponse {
                     ty: InteractionResponseType::ChannelMessageWithSource,
