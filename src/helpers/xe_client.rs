@@ -1,5 +1,6 @@
 use chrono;
 use reqwest;
+use serde::Deserialize;
 use serde_json::Value;
 use worker::kv::KvStore;
 use worker::RouteContext;
@@ -18,6 +19,15 @@ pub struct Request {
     from: String,
     to: String,
     amount: f64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FixerResponse {
+    base: String,
+    date: String,
+    rates: Value,
+    success: bool,
+    timestamp: u64,
 }
 
 pub struct XEClient {
@@ -114,17 +124,21 @@ impl XEClient {
         }
 
         let api_key = ctx.var("CURR_CONV_TOKEN")?.to_string();
-        let res = reqwest::get(format!(
-            "https://free.currconv.com/api/v7/convert?q={}&compact=ultra&apiKey={}",
-            conversion_key, api_key
-        ))
-        .await?
-        .json::<Value>()
-        .await?;
+        let res = self
+            .client
+            .get(format!(
+                "https://api.apilayer.com/fixer/latest?symbols={}&base={}",
+                self.request.to, self.request.from
+            ))
+            .header("apiKey", api_key)
+            .send()
+            .await?
+            .json::<FixerResponse>()
+            .await?;
 
         worker::console_log!("Currency converter body : {:?}", res);
 
-        let rate: Option<f64> = res[conversion_key.clone().as_str()].as_f64();
+        let rate: Option<f64> = res.rates[self.request.to.clone().as_str()].as_f64();
 
         // Cache rate
         if rate.is_some() {
