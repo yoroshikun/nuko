@@ -180,7 +180,7 @@ impl XEClient {
     }
 
     fn get_xe(&self) -> String {
-        format!("{:4}", (self.rate.unwrap_or(1.) * self.request.amount))
+        format!("{:.4}", (self.rate.unwrap_or(1.) * self.request.amount))
     }
 
     pub(crate) fn construct_embed(&self) -> Embed {
