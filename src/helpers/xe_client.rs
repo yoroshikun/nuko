@@ -19,6 +19,7 @@ pub struct Request {
     from: String,
     to: String,
     amount: f64,
+    precision: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -41,6 +42,7 @@ impl XEClient {
         from: Option<&String>,
         to: Option<&String>,
         amount: Option<&String>,
+        precision: Option<&String>,
         kv: &KvStore,
         username: &String,
     ) -> Self {
@@ -54,6 +56,9 @@ impl XEClient {
                     .await
                     .unwrap_or("JPY".into()),
                 amount: XEClient::resolve_amount(amount).await,
+                precision: XEClient::resolve_precision(precision, kv, username)
+                    .await
+                    .unwrap_or(4),
             },
             rate: None,
         }
@@ -93,6 +98,28 @@ impl XEClient {
             .await?
             .unwrap_or("JPY".into())
             .into())
+    }
+
+    async fn resolve_precision(
+        precision: Option<&String>,
+        kv: &KvStore,
+        username: &String,
+    ) -> Result<usize, Box<dyn std::error::Error>> {
+        if precision.is_some() {
+            return Ok(precision
+                .unwrap_or(&"4".into())
+                .parse::<usize>()
+                .unwrap_or(4));
+        }
+
+        let key = format!("{}:currency_precision", username);
+        Ok(kv
+            .get(key.as_str())
+            .text()
+            .await?
+            .unwrap_or("4".into())
+            .parse::<usize>()
+            .unwrap_or(4))
     }
 
     async fn resolve_amount(amount: Option<&String>) -> f64 {
@@ -168,6 +195,7 @@ impl XEClient {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let to_key = format!("{}:currency_to", username);
         let from_key = format!("{}:currency_from", username);
+        let precision_key = format!("{}:currency_precision", username);
 
         kv.put(to_key.as_str(), self.request.to.clone())?
             .execute()
@@ -175,12 +203,23 @@ impl XEClient {
         kv.put(from_key.as_str(), self.request.from.clone())?
             .execute()
             .await?;
+        kv.put(precision_key.as_str(), self.request.precision)?
+            .execute()
+            .await?;
 
         Ok(())
     }
 
     fn get_xe(&self) -> String {
-        format!("{:.4}", (self.rate.unwrap_or(1.) * self.request.amount))
+        format!(
+            "{xe:.precision$}",
+            xe = (self.rate.unwrap_or(1.) * self.request.amount),
+            precision = (if self.request.precision <= 12 {
+                self.request.precision
+            } else {
+                12
+            })
+        )
     }
 
     pub(crate) fn construct_embed(&self) -> Embed {

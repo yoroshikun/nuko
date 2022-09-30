@@ -74,6 +74,7 @@ impl Command for XE {
             options_hash_map.get("from"),
             options_hash_map.get("to"),
             options_hash_map.get("amount"),
+            options_hash_map.get("precision"),
             &ctx.kv("exchange_defaults")?,
             &username,
         )
@@ -150,6 +151,14 @@ impl Command for XE {
                 name: "amount".into(),
                 autocomplete: Some(false),
                 description: "The amount of the currency (Number)".into(),
+                required: Some(false),
+                ty: ApplicationCommandOptionType::String,
+                choices: None,
+            },
+            ApplicationCommandOption {
+                name: "precision".into(),
+                autocomplete: Some(false),
+                description: "Precision of the decimal points (u8, max 12, default: 4)".into(),
                 required: Some(false),
                 ty: ApplicationCommandOptionType::String,
                 choices: None,

@@ -3,8 +3,7 @@ use crate::error::InteractionError;
 use crate::helpers::jisho_client::JishoClient;
 use crate::interaction::{
     ApplicationCommandInteractionDataOption, ApplicationCommandOption,
-    ApplicationCommandOptionChoice, ApplicationCommandOptionType,
-    InteractionApplicationCommandCallbackData, Member,
+    ApplicationCommandOptionType, InteractionApplicationCommandCallbackData, Member,
 };
 
 use async_trait::async_trait;
