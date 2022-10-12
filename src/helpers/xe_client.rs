@@ -404,9 +404,14 @@ impl XEClient {
                     name: "Range".to_string(),
                     inline: Some(false),
                     value: format!(
-                        "Showing: {} -> {}",
+                        "{} -> {}",
                         self.request.dates.start_date, self.request.dates.end_date
                     ),
+                },
+                EmbedField {
+                    name: "Converting".to_string(),
+                    inline: Some(false),
+                    value: format!("{} -> {}", self.request.to, self.request.from),
                 },
             ],
             color: Some(0xfdc835),
