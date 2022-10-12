@@ -379,7 +379,7 @@ impl XEClient {
         Embed {
             title: "Exchange Rate Timeseries".into(),
             description: format!(
-                "{}",
+                "```{}```",
                 plot(
                     timeseries_vec,
                     Config::default().with_offset(10).with_height(10)
@@ -399,6 +399,14 @@ impl XEClient {
                     name: "Max".to_string(),
                     inline: Some(true),
                     value: format!("{:.2}", max),
+                },
+                EmbedField {
+                    name: "Range".to_string(),
+                    inline: Some(false),
+                    value: format!(
+                        "Showing: {} -> {}",
+                        self.request.dates.start_date, self.request.dates.end_date
+                    ),
                 },
             ],
             color: Some(0xfdc835),
