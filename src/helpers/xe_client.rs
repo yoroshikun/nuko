@@ -382,7 +382,7 @@ impl XEClient {
                 "```{}```",
                 plot(
                     timeseries_vec,
-                    Config::default().with_offset(10).with_height(10)
+                    Config::default().with_height(10).with_width(40)
                 )
             )
             .to_string(),
