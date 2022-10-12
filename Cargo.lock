@@ -576,6 +576,7 @@ dependencies = [
  "console_error_panic_hook",
  "ed25519-dalek",
  "hex",
+ "rasciigraph",
  "reqwest",
  "serde",
  "serde_json",
@@ -833,6 +834,12 @@ checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
 ]
+
+[[package]]
+name = "rasciigraph"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10f9690d7e935db7c1475554993ec7162d11a83fae5261be2d9191294a31ac82"
 
 [[package]]
 name = "redox_syscall"

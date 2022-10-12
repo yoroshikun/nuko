@@ -2,7 +2,7 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::embed::{Embed, EmbedField, EmbedFooter};
+use crate::embed::{Embed, EmbedField};
 
 #[derive(Deserialize)]
 pub struct Response {

@@ -70,11 +70,17 @@ impl Command for XE {
             _ => false,
         };
 
+        let is_getting_timeseries = match options_hash_map.get("timeseries") {
+            Some(x) => true,
+            _ => false,
+        };
+
         let mut xe_client = XEClient::new(
             options_hash_map.get("from"),
             options_hash_map.get("to"),
             options_hash_map.get("amount"),
             options_hash_map.get("precision"),
+            options_hash_map.get("timeseries"),
             &ctx.kv("exchange_defaults")?,
             &username,
         )
@@ -101,11 +107,25 @@ impl Command for XE {
             });
         }
 
+        if is_getting_timeseries {
+            xe_client
+                .get_timeseries(ctx, &ctx.kv("exchange_defaults")?)
+                .await
+                .expect("Unable to get timeseries");
+            let embed = xe_client.construct_timeseries_embed();
+
+            return Ok(InteractionApplicationCommandCallbackData {
+                content: None,
+                choices: None,
+                embeds: Some(vec![embed]),
+            });
+        }
+
         xe_client
             .get_rate(ctx, &ctx.kv("exchange_defaults")?)
             .await
             .expect("Unable to get exchange rate from api");
-        let embed = xe_client.construct_embed();
+        let embed = xe_client.construct_rate_embed();
 
         Ok(InteractionApplicationCommandCallbackData {
             content: None,
@@ -159,6 +179,16 @@ impl Command for XE {
                 name: "precision".into(),
                 autocomplete: Some(false),
                 description: "Precision of the decimal points (u8, max 12, default: 4)".into(),
+                required: Some(false),
+                ty: ApplicationCommandOptionType::String,
+                choices: None,
+            },
+            ApplicationCommandOption {
+                name: "timeseries".into(),
+                autocomplete: Some(false),
+                description:
+                    "Get a timeseries graph of historical data (format: YYYY-MM-DD_YYYY_MM_DD)"
+                        .into(),
                 required: Some(false),
                 ty: ApplicationCommandOptionType::String,
                 choices: None,

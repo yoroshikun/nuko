@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use chrono;
+use rasciigraph::{plot, Config};
 use reqwest;
 use serde::Deserialize;
 use serde_json::Value;
 use worker::kv::KvStore;
 use worker::RouteContext;
 
-use crate::embed::Embed;
+use crate::embed::{Embed, EmbedField};
 
 pub struct XEOptions {
     set_default: Option<bool>,
@@ -20,6 +23,7 @@ pub struct Request {
     to: String,
     amount: f64,
     precision: usize,
+    dates: TimeseriesRequest,
 }
 
 #[derive(Deserialize, Debug)]
@@ -31,10 +35,29 @@ pub struct FixerResponse {
     timestamp: u64,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct FixerTimeseriesResponse {
+    base: String,
+    start_date: String,
+    end_date: String,
+    rates: TimeseriesResponse,
+    success: bool,
+    timeseries: bool,
+}
+
+pub type TimeseriesResponse = HashMap<String, HashMap<String, f64>>;
+
+#[derive(Clone)]
+pub struct TimeseriesRequest {
+    from_date: String,
+    to_date: String,
+}
+
 pub struct XEClient {
     client: reqwest::Client,
     request: Request,
     rate: Option<f64>,
+    timeseries: Option<TimeseriesResponse>,
 }
 
 impl XEClient {
@@ -43,6 +66,7 @@ impl XEClient {
         to: Option<&String>,
         amount: Option<&String>,
         precision: Option<&String>,
+        dates: Option<&String>,
         kv: &KvStore,
         username: &String,
     ) -> Self {
@@ -59,8 +83,10 @@ impl XEClient {
                 precision: XEClient::resolve_precision(precision, kv, username)
                     .await
                     .unwrap_or(4),
+                dates: XEClient::resolve_dates(dates),
             },
             rate: None,
+            timeseries: None,
         }
     }
 
@@ -124,6 +150,104 @@ impl XEClient {
 
     async fn resolve_amount(amount: Option<&String>) -> f64 {
         amount.unwrap_or(&"1".into()).parse::<f64>().unwrap_or(1.)
+    }
+
+    fn resolve_dates(dates: Option<&String>) -> TimeseriesRequest {
+        // Default is today and a two weeks ago in the format YYYY-MM-DD
+        let default_from_date = chrono::Utc::today()
+            .naive_utc()
+            .format("%Y-%m-%d")
+            .to_string();
+        let default_to_date = (chrono::Utc::today() - chrono::Duration::days(14))
+            .naive_utc()
+            .format("%Y-%m-%d")
+            .to_string();
+
+        // Split the request by - if exists
+        let timeseries = match dates {
+            Some(dates) => {
+                let split_dates = dates.split('_').collect::<Vec<&str>>();
+
+                TimeseriesRequest {
+                    from_date: match split_dates.get(0) {
+                        Some(from_date) => from_date.to_string(),
+                        None => default_from_date,
+                    },
+                    to_date: match split_dates.get(1) {
+                        Some(to_date) => to_date.to_string(),
+                        None => default_to_date,
+                    },
+                }
+            }
+            None => TimeseriesRequest {
+                from_date: default_from_date,
+                to_date: default_to_date,
+            },
+        };
+
+        timeseries
+    }
+
+    pub async fn get_timeseries(
+        &mut self,
+        ctx: &mut RouteContext<()>,
+        kv: &KvStore,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let timeseries_cache_key = format!(
+            "{}_{}_{}_{}",
+            self.request.dates.from_date,
+            self.request.dates.to_date,
+            self.request.from,
+            self.request.to
+        );
+
+        // Get the cache
+        let timeseries_cache = kv
+            .get(format!("timeseries_cache:{}", timeseries_cache_key).as_str())
+            .text()
+            .await?;
+
+        // Get cache if exists
+        if timeseries_cache.is_some() {
+            let timeseries_cache = timeseries_cache.unwrap();
+            let timeseries_cache: TimeseriesResponse =
+                serde_json::from_str(timeseries_cache.as_str())?;
+
+            self.timeseries = Some(timeseries_cache);
+            return Ok(());
+        };
+
+        let api_key = ctx.var("CURR_CONV_TOKEN")?.to_string();
+        let res = self
+            .client
+            .get(format!(
+                "https://api.apilayer.com/fixer/timeseries?symbols={}&base={}&from_date={}&to_date={}",
+                self.request.to, self.request.from, self.request.dates.from_date, self.request.dates.to_date
+            ))
+            .header("apiKey", api_key)
+            .send()
+            .await?
+            .json::<FixerTimeseriesResponse>()
+            .await?;
+
+        worker::console_log!("Currency converter timeseries body : {:?}", res);
+
+        let rates = res.rates;
+
+        // Set the cache
+        if !rates.is_empty() {
+            kv.put(
+                format!("timeseries_cache:{}", timeseries_cache_key.clone()).as_str(),
+                serde_json::to_string(&rates)
+                    .expect("Could not convert timeseries rates to json string")
+                    .as_str(), // Serialise this
+            )?
+            .execute()
+            .await?;
+            self.timeseries = Some(rates);
+        }
+
+        Ok(())
     }
 
     pub async fn get_rate(
@@ -222,7 +346,7 @@ impl XEClient {
         )
     }
 
-    pub(crate) fn construct_embed(&self) -> Embed {
+    pub(crate) fn construct_rate_embed(&self) -> Embed {
         Embed {
             title: "Exchange Rate".into(),
             description: format!(
@@ -236,6 +360,48 @@ impl XEClient {
             thumbnail: None,
             footer: None,
             fields: vec![],
+            color: Some(0xfdc835),
+        }
+    }
+
+    pub(crate) fn construct_timeseries_embed(&self) -> Embed {
+        // Turn the timeseries into a vec of values
+        let mut timeseries_vec: Vec<f64> = vec![];
+
+        for (_, v) in self.timeseries.clone().unwrap().iter() {
+            timeseries_vec.push(v[self.request.to.clone().as_str()]);
+        }
+
+        // Find max in vec
+        let max = timeseries_vec.iter().cloned().fold(f64::MIN, f64::max);
+        // Find min in vec
+        let min = timeseries_vec.iter().cloned().fold(f64::MAX, f64::min);
+
+        Embed {
+            title: "Exchange Rate Timeseries".into(),
+            description: format!(
+                "{}",
+                plot(
+                    timeseries_vec,
+                    Config::default().with_offset(10).with_height(10)
+                )
+            )
+            .to_string(),
+            url: None,
+            thumbnail: None,
+            footer: None,
+            fields: vec![
+                EmbedField {
+                    name: "Min".to_string(),
+                    inline: Some(true),
+                    value: format!("{:.2}", min),
+                },
+                EmbedField {
+                    name: "Max".to_string(),
+                    inline: Some(true),
+                    value: format!("{:.2}", max),
+                },
+            ],
             color: Some(0xfdc835),
         }
     }
