@@ -49,8 +49,8 @@ pub type TimeseriesResponse = HashMap<String, HashMap<String, f64>>;
 
 #[derive(Clone)]
 pub struct TimeseriesRequest {
-    from_date: String,
-    to_date: String,
+    start_date: String,
+    end_date: String,
 }
 
 pub struct XEClient {
@@ -153,12 +153,11 @@ impl XEClient {
     }
 
     fn resolve_dates(dates: Option<&String>) -> TimeseriesRequest {
-        // Default is today and a two weeks ago in the format YYYY-MM-DD
-        let default_from_date = chrono::Utc::today()
+        let default_end_date = chrono::Utc::today()
             .naive_utc()
             .format("%Y-%m-%d")
             .to_string();
-        let default_to_date = (chrono::Utc::today() - chrono::Duration::days(14))
+        let default_start_date = (chrono::Utc::today() - chrono::Duration::days(14))
             .naive_utc()
             .format("%Y-%m-%d")
             .to_string();
@@ -169,19 +168,19 @@ impl XEClient {
                 let split_dates = dates.split('_').collect::<Vec<&str>>();
 
                 TimeseriesRequest {
-                    from_date: match split_dates.get(0) {
-                        Some(from_date) => from_date.to_string(),
-                        None => default_from_date,
+                    start_date: match split_dates.get(0) {
+                        Some(start_date) => start_date.to_string(),
+                        None => default_start_date,
                     },
-                    to_date: match split_dates.get(1) {
-                        Some(to_date) => to_date.to_string(),
-                        None => default_to_date,
+                    end_date: match split_dates.get(1) {
+                        Some(end_date) => end_date.to_string(),
+                        None => default_end_date,
                     },
                 }
             }
             None => TimeseriesRequest {
-                from_date: default_from_date,
-                to_date: default_to_date,
+                start_date: default_start_date,
+                end_date: default_end_date,
             },
         };
 
@@ -195,8 +194,8 @@ impl XEClient {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let timeseries_cache_key = format!(
             "{}_{}_{}_{}",
-            self.request.dates.from_date,
-            self.request.dates.to_date,
+            self.request.dates.start_date,
+            self.request.dates.end_date,
             self.request.from,
             self.request.to
         );
@@ -221,8 +220,8 @@ impl XEClient {
         let res = self
             .client
             .get(format!(
-                "https://api.apilayer.com/fixer/timeseries?symbols={}&base={}&from_date={}&to_date={}",
-                self.request.to, self.request.from, self.request.dates.from_date, self.request.dates.to_date
+                "https://api.apilayer.com/fixer/timeseries?symbols={}&base={}&start_date={}&end_date={}",
+                self.request.to, self.request.from, self.request.dates.start_date, self.request.dates.end_date
             ))
             .header("apiKey", api_key)
             .send()
