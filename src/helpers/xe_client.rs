@@ -47,7 +47,7 @@ pub struct FixerTimeseriesResponse {
 
 pub type TimeseriesResponse = HashMap<String, HashMap<String, f64>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TimeseriesRequest {
     start_date: String,
     end_date: String,
@@ -83,7 +83,12 @@ impl XEClient {
                 precision: XEClient::resolve_precision(precision, kv, username)
                     .await
                     .unwrap_or(4),
-                dates: XEClient::resolve_dates(dates),
+                dates: XEClient::resolve_dates(dates, kv, username)
+                    .await
+                    .unwrap_or(TimeseriesRequest {
+                        start_date: "2022-01-01".into(),
+                        end_date: "2022-02-01".into(),
+                    }),
             },
             rate: None,
             timeseries: None,
@@ -152,15 +157,39 @@ impl XEClient {
         amount.unwrap_or(&"1".into()).parse::<f64>().unwrap_or(1.)
     }
 
-    fn resolve_dates(dates: Option<&String>) -> TimeseriesRequest {
-        let default_end_date = chrono::Utc::today()
-            .naive_utc()
-            .format("%Y-%m-%d")
-            .to_string();
-        let default_start_date = (chrono::Utc::today() - chrono::Duration::days(21))
-            .naive_utc()
-            .format("%Y-%m-%d")
-            .to_string();
+    async fn resolve_dates(
+        dates: Option<&String>,
+        kv: &KvStore,
+        username: &String,
+    ) -> Result<TimeseriesRequest, Box<dyn std::error::Error>> {
+        let timeseries_default_key = format!("{}:timeseries_offset", username);
+
+        let timeseries_cache = kv.get(timeseries_default_key.as_str()).text().await?;
+        let timeseries_cache_split = match &timeseries_cache {
+            Some(cache) => cache.split('_').collect::<Vec<&str>>(),
+            None => vec!["0"],
+        };
+
+        let cache_default_start_offset = match timeseries_cache_split.get(0) {
+            Some(offset) => offset.parse::<i64>().unwrap_or(0),
+            None => 0,
+        };
+
+        let cache_default_end_offset = match timeseries_cache_split.get(1) {
+            Some(offset) => offset.parse::<i64>().unwrap_or(-21),
+            None => -21,
+        };
+
+        let default_end_date = (chrono::Utc::today()
+            + chrono::Duration::days(cache_default_end_offset))
+        .naive_utc()
+        .format("%Y-%m-%d")
+        .to_string();
+        let default_start_date = (chrono::Utc::today()
+            + chrono::Duration::days(cache_default_start_offset))
+        .naive_utc()
+        .format("%Y-%m-%d")
+        .to_string();
 
         // Split the request by - if exists
         let timeseries = match dates {
@@ -190,7 +219,9 @@ impl XEClient {
             },
         };
 
-        timeseries
+        worker::console_log!("Decided that timesries should be: {:?}", &timeseries);
+
+        Ok(timeseries)
     }
 
     pub async fn get_timeseries(
@@ -325,6 +356,7 @@ impl XEClient {
         let to_key = format!("{}:currency_to", username);
         let from_key = format!("{}:currency_from", username);
         let precision_key = format!("{}:currency_precision", username);
+        let timeseries_key = format!("{}:timeseries_offset", username);
 
         kv.put(to_key.as_str(), self.request.to.clone())?
             .execute()
@@ -335,6 +367,16 @@ impl XEClient {
         kv.put(precision_key.as_str(), self.request.precision)?
             .execute()
             .await?;
+        kv.put(
+            timeseries_key.as_str(),
+            format!(
+                "{}_{}",
+                self.request.dates.start_date.clone(),
+                self.request.dates.end_date.clone()
+            ),
+        )?
+        .execute()
+        .await?;
 
         Ok(())
     }
@@ -417,7 +459,7 @@ impl XEClient {
                 EmbedField {
                     name: "Converting".to_string(),
                     inline: Some(false),
-                    value: format!("{} -> {}", self.request.to, self.request.from),
+                    value: format!("{} -> {}", self.request.from, self.request.to),
                 },
             ],
             color: Some(0xfdc835),
