@@ -157,7 +157,7 @@ impl XEClient {
             .naive_utc()
             .format("%Y-%m-%d")
             .to_string();
-        let default_start_date = (chrono::Utc::today() - chrono::Duration::days(14))
+        let default_start_date = (chrono::Utc::today() - chrono::Duration::days(21))
             .naive_utc()
             .format("%Y-%m-%d")
             .to_string();
@@ -169,7 +169,13 @@ impl XEClient {
 
                 TimeseriesRequest {
                     start_date: match split_dates.get(0) {
-                        Some(start_date) => start_date.to_string(),
+                        Some(start_date) => {
+                            if start_date == &"default" {
+                                default_start_date
+                            } else {
+                                start_date.to_string()
+                            }
+                        }
                         None => default_start_date,
                     },
                     end_date: match split_dates.get(1) {
